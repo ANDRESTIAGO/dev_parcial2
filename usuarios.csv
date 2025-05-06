@@ -1,0 +1,3 @@
+id,nombre,correo,premium,activo
+1,andres,string,True,True
+2,santiago,string,False,True
