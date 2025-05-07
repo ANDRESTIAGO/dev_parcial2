@@ -1,40 +1,42 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from typing import Optional, List
+from sqlalchemy.ext.asyncio import AsyncSession
 from models import UsuarioCrear, Usuario, UsuarioActualizar
+from db import get_session
 import operations_db as funciones
 
 app = FastAPI(title="API Local de Usuarios", docs_url="/docs")
 
 @app.post("/usuarios/", response_model=Usuario)
-def crear_usuario(usuario: UsuarioCrear):
-    return funciones.crear_usuario(usuario)
+async def crear(usuario: UsuarioCrear, session: AsyncSession = Depends(get_session)):
+    return await funciones.crear_usuario(usuario, session)
 
 @app.get("/usuarios/", response_model=List[Usuario])
-def leer_usuarios():
-    return funciones.obtener_todos()
-
-@app.get("/usuarios_premium/", response_model=List[Usuario])
-def leer_premium():
-    return funciones.usuarios_premium_activos()
+async def leer_todos(session: AsyncSession = Depends(get_session)):
+    return await funciones.obtener_todos(session)
 
 @app.get("/usuarios/{user_id}", response_model=Usuario)
-def leer_usuario(user_id: int):
-    usuario = funciones.obtener_uno(user_id)
-    if usuario is None:
+async def leer_uno(user_id: int, session: AsyncSession = Depends(get_session)):
+    usuario = await funciones.obtener_uno(user_id, session)
+    if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return usuario
 
 @app.patch("/usuarios/{user_id}", response_model=Usuario)
-def actualizar_usuario(user_id: int, datos: UsuarioActualizar):
-    usuario = funciones.actualizar_usuario(user_id, datos)
-    if usuario is None:
+async def actualizar(user_id: int, datos: UsuarioActualizar, session: AsyncSession = Depends(get_session)):
+    usuario = await funciones.actualizar_usuario(user_id, datos, session)
+    if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return usuario
 
 @app.get("/usuarios/activos-premium", response_model=List[Usuario])
-def obtener_premium_activos():
-    return funciones.usuarios_premium_activos()
+async def obtener_activos_premium(session: AsyncSession = Depends(get_session)):
+    return await funciones.usuarios_premium_activos(session)
 
 @app.get("/usuarios/filtrar", response_model=List[Usuario])
-def filtrar(premium: Optional[bool] = None, activo: Optional[bool] = None):
-    return funciones.filtrar_usuarios(premium, activo)
+async def filtrar(
+    premium: Optional[bool] = None,
+    activo: Optional[bool] = None,
+    session: AsyncSession = Depends(get_session)
+):
+    return await funciones.filtrar_usuarios(premium, activo, session)

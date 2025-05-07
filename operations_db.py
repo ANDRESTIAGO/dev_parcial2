@@ -1,91 +1,47 @@
-from models import Usuario, UsuarioCrear, UsuarioActualizar
 from typing import List, Optional
-import csv
-import os
+from sqlmodel import select
+from models import Usuario, UsuarioCrear, UsuarioActualizar
+from db import get_session
+from fastapi import Depends
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-ARCHIVO_CSV = "usuarios.csv"
-CAMPOS = ["id", "nombre", "correo", "premium", "activo"]
-
-def cargar_usuarios() -> List[Usuario]:
-    usuarios = []
-    if os.path.exists(ARCHIVO_CSV):
-        with open(ARCHIVO_CSV, newline='', encoding='utf-8') as f:
-            lector = csv.DictReader(f)
-            for fila in lector:
-                usuarios.append(Usuario(
-                    id=int(fila["id"]),
-                    nombre=fila["nombre"],
-                    correo=fila["correo"],
-                    premium=fila["premium"].lower() == "true",
-                    activo=fila["activo"].lower() == "true"
-                ))
-    return usuarios
-
-def guardar_usuarios(usuarios: List[Usuario]):
-    with open(ARCHIVO_CSV, "w", newline='', encoding='utf-8') as f:
-        escritor = csv.DictWriter(f, fieldnames=CAMPOS)
-        escritor.writeheader()
-        for u in usuarios:
-            escritor.writerow({
-                "id": u.id,
-                "nombre": u.nombre,
-                "correo": u.correo,
-                "premium": u.premium,
-                "activo": u.activo
-            })
-
-usuarios_db: List[Usuario] = cargar_usuarios()
-contador_id = max((u.id for u in usuarios_db), default=0) + 1
-
-def crear_usuario(datos: UsuarioCrear) -> Usuario:
-    global contador_id
-    nuevo = Usuario(id=contador_id, premium=False, activo=True, **datos.dict())
-    usuarios_db.append(nuevo)
-    guardar_usuarios(usuarios_db)
-    contador_id += 1
+async def crear_usuario(datos: UsuarioCrear, session: AsyncSession) -> Usuario:
+    nuevo = Usuario(**datos.dict())
+    session.add(nuevo)
+    await session.commit()
+    await session.refresh(nuevo)
     return nuevo
 
-def obtener_todos() -> List[Usuario]:
-    return usuarios_db
+async def obtener_todos(session: AsyncSession) -> List[Usuario]:
+    result = await session.execute(select(Usuario))
+    return result.scalars().all()
 
-def obtener_uno(user_id: int) -> Optional[Usuario]:
-    return next((u for u in usuarios_db if u.id == user_id), None)
+async def obtener_uno(user_id: int, session: AsyncSession) -> Optional[Usuario]:
+    return await session.get(Usuario, user_id)
 
-def actualizar_usuario(user_id: int, datos: UsuarioActualizar) -> Optional[Usuario]:
-    usuario = obtener_uno(user_id)
+async def actualizar_usuario(user_id: int, datos: UsuarioActualizar, session: AsyncSession) -> Optional[Usuario]:
+    usuario = await obtener_uno(user_id, session)
     if usuario:
         if datos.premium is not None:
             usuario.premium = datos.premium
         if datos.activo is not None:
             usuario.activo = datos.activo
-        guardar_usuarios(usuarios_db)
+        session.add(usuario)
+        await session.commit()
+        await session.refresh(usuario)
     return usuario
 
-def usuarios_premium_activos() -> List[Usuario]:
-    usuarios = leer_usuarios_csv()
-    return [u for u in usuarios if u.premium and u.activo]
+async def usuarios_premium_activos(session: AsyncSession) -> List[Usuario]:
+    result = await session.execute(
+        select(Usuario).where(Usuario.premium == True, Usuario.activo == True)
+    )
+    return result.scalars().all()
 
-def filtrar_usuarios(premium: Optional[bool], activo: Optional[bool]) -> List[Usuario]:
-    resultado = usuarios_db
+async def filtrar_usuarios(premium: Optional[bool], activo: Optional[bool], session: AsyncSession) -> List[Usuario]:
+    query = select(Usuario)
     if premium is not None:
-        resultado = [u for u in resultado if u.premium == premium]
+        query = query.where(Usuario.premium == premium)
     if activo is not None:
-        resultado = [u for u in resultado if u.activo == activo]
-    return resultado
-
-def leer_usuarios_csv() -> List[Usuario]:
-    usuarios = []
-    if os.path.exists(ARCHIVO_CSV):
-        with open(ARCHIVO_CSV, mode="r", newline="", encoding="utf-8") as f:
-            lector = csv.DictReader(f)
-            for fila in lector:
-                usuarios.append(
-                    Usuario(
-                        id=int(fila["id"]),
-                        nombre=fila["nombre"],
-                        correo=fila["correo"],
-                        premium=fila["premium"].lower() == "true",
-                        activo=fila["activo"].lower() == "true"
-                    )
-                )
-    return usuarios
+        query = query.where(Usuario.activo == activo)
+    result = await session.execute(query)
+    return result.scalars().all()

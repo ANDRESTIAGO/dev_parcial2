@@ -1,17 +1,18 @@
-from pydantic import BaseModel
+from sqlmodel import SQLModel, Field
+from typing import Optional
 
-class UsuarioBase(BaseModel):
+class UsuarioBase(SQLModel):
     nombre: str
     correo: str
+
+class Usuario(UsuarioBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    premium: bool = False
+    activo: bool = True
 
 class UsuarioCrear(UsuarioBase):
     pass
 
-class UsuarioActualizar(BaseModel):
-    premium: bool | None = None
-    activo: bool | None = None
-
-class Usuario(UsuarioBase):
-    id: int
-    premium: bool
-    activo: bool
+class UsuarioActualizar(SQLModel):
+    premium: Optional[bool] = None
+    activo: Optional[bool] = None
