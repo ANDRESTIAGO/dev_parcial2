@@ -1,9 +1,10 @@
 from typing import List, Optional
 from sqlmodel import select
-from models import Usuario, UsuarioCrear, UsuarioActualizar
+from models import *
 from db import get_session
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
+from datetime import datetime
 
 async def crear_usuario(datos: UsuarioCrear, session: AsyncSession) -> Usuario:
     nuevo = Usuario(**datos.dict())
@@ -45,3 +46,44 @@ async def filtrar_usuarios(premium: Optional[bool], activo: Optional[bool], sess
         query = query.where(Usuario.activo == activo)
     result = await session.execute(query)
     return result.scalars().all()
+
+async def eliminar_usuario(id: int, session: AsyncSession):
+    usuario = await session.get(Usuario, id)
+    if not usuario:
+        return None
+    await session.delete(usuario)
+    await session.commit()
+    return usuario
+
+async def crear_tarea(tarea: TareaCrear, session: AsyncSession):
+    nueva = Tarea.from_orm(tarea)
+    session.add(nueva)
+    await session.commit()
+    await session.refresh(nueva)
+    return nueva
+
+async def obtener_tareas(session: AsyncSession):
+    resultado = await session.exec(select(Tarea))
+    return resultado.all()
+
+async def obtener_tarea(id: int, session: AsyncSession):
+    return await session.get(Tarea, id)
+
+async def actualizar_tarea(id: int, datos: TareaActualizar, session: AsyncSession):
+    tarea = await session.get(Tarea, id)
+    if not tarea:
+        return None
+    for k, v in datos.dict(exclude_unset=True).items():
+        setattr(tarea, k, v)
+    tarea.fecha_modificacion = datetime.utcnow()
+    await session.commit()
+    await session.refresh(tarea)
+    return tarea
+
+async def eliminar_tarea(id: int, session: AsyncSession):
+    tarea = await session.get(Tarea, id)
+    if not tarea:
+        return None
+    await session.delete(tarea)
+    await session.commit()
+    return tarea
