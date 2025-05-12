@@ -2,10 +2,14 @@ from fastapi import FastAPI, HTTPException, Depends
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import *
-from db import get_session
+from db import get_session, init_db
 import operations_db as funciones
 
 app = FastAPI(title="API Local de Usuarios", docs_url="/docs")
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
 
 @app.post("/usuarios/", response_model=Usuario)
 async def crear(usuario: UsuarioCrear, session: AsyncSession = Depends(get_session)):
